@@ -1,0 +1,20 @@
+{
+    order tinywaf first
+}
+
+http://localhost:8282 {
+	root * /files
+	file_server {
+		browse
+		hide .sync
+	}
+
+	log {
+		output file /logs/caddylog {
+			roll_size     50MiB
+			roll_keep     200
+		}
+	}
+
+	tinywaf stdout
+}
