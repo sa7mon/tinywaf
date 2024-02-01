@@ -7,9 +7,7 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"go.uber.org/zap"
-	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -41,9 +39,6 @@ func (TinyWAF) CaddyModule() caddy.ModuleInfo {
 func (m *TinyWAF) Provision(ctx caddy.Context) error {
 	m.logger = ctx.Logger()
 
-	//badURIPatterns := []string{`^/wp-admin/.+`}
-
-	// range m.badURIPatterns
 	for _, pattern := range m.BadURIs {
 		re, err := regexp.Compile(pattern)
 		if err != nil {
@@ -51,15 +46,16 @@ func (m *TinyWAF) Provision(ctx caddy.Context) error {
 		}
 		m.badURIPatterns = append(m.badURIPatterns, re)
 	}
-	m.logger.Debug(fmt.Sprintf("%v URI patterns loaded", len(m.badURIPatterns)))
+	m.logger.Info(fmt.Sprintf("%v URI patterns loaded", len(m.badURIPatterns)))
+	m.logger.Info(fmt.Sprintf("ban_minutes set to %v", m.BanMinutes))
 	return nil
 }
 
 // Validate implements caddy.Validator.
 func (m *TinyWAF) Validate() error {
-	//if m.w == nil {
-	//	return fmt.Errorf("no writer")
-	//}
+	if m.BanMinutes <= 0 {
+		return fmt.Errorf("ban_minutes must be > 0")
+	}
 	return nil
 }
 
@@ -89,23 +85,8 @@ func (m TinyWAF) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	return next.ServeHTTP(w, r)
 }
 
-func tempLog(f *os.File, s string) {
-	_, err := f.WriteString(s + "\n")
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 // UnmarshalCaddyfile implements caddyfile.Unmarshaler.
 func (m *TinyWAF) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	f, ferr := os.Create("temp.log")
-	if ferr != nil {
-		return ferr
-	}
-	// remember to close the file
-	defer f.Close()
-
-	tempLog(f, "hello from UnmarshalCaddyfile")
 	for d.Next() {
 		for d.NextBlock(0) {
 			key := d.Val()
@@ -114,68 +95,31 @@ func (m *TinyWAF) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 				if !d.NextArg() {
 					return d.ArgErr()
 				}
-				tempLog(f, "found ban_minutes key")
 				minutes, err := strconv.Atoi(d.Val())
 				if err != nil {
 					return d.ArgErr()
 				}
 				m.BanMinutes = minutes
-				tempLog(f, fmt.Sprintf("setting ban_minutes to %v", minutes))
 			case "bad_uris":
-				tempLog(f, "found bad_uris key")
 				if d.NextArg() { // arg after bad_uris instead of a brace
 					return d.ArgErr()
 				}
-				if !d.NextBlock(0) {
-					// expected to find the opening of a block, but found something else
+				if !d.NextBlock(0) { // expected to find the opening of a block, but found something else
 					return d.ArgErr()
 				}
-				//tempLog(f, fmt.Sprintf("bad_uris val: %s", d.Val()))
 
 				for d.NextLine() {
 					arg := d.Val()
 					if arg == "}" {
-						//continue
 						break
 					}
-					tempLog(f, fmt.Sprintf("bad_uris arg: %s", arg))
+					m.BadURIs = append(m.BadURIs, arg)
 				}
-				//if !d.Args(&value) {
-				//	// not enough args
-				//	return d.ArgErr()
-				//}
-				//
-				//if d.NextArg() {
-				//	// too many args
-				//	return d.ArgErr()
-				//}
 			case "}", "{":
-
 			default:
-				tempLog(f, fmt.Sprintf("found other key: %s", key))
 			}
 		}
-		//tempLog(f, fmt.Sprintf("key: %s", key))
 	}
-	//for d.Next() { // consume directive name
-	//	var value string
-	//	m.logger.Info("directive: " + d.Val())
-	//	if !d.Args(&value) {
-	//		// not enough args
-	//		return d.ArgErr()
-	//	}
-	//	m.logger.Info("value: " + value)
-	//}
-
-	//// require an argument
-	//if !d.NextArg() {
-	//	return d.ArgErr()
-	//}
-
-	//d.ValRaw()
-	// store the argument
-	//uris := make([]string, 0)
-	//m.BadURIs = d.Val()
 	return nil
 }
 
