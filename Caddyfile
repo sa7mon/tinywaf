@@ -18,8 +18,8 @@ http://localhost:8282 {
 
 	tinywaf {
 	    bad_uris {
-	        \^/wp-admin/.+$
-	        \^/login.php$
+	        ^/wp-admin/.+$
+	        ^/login.php
 	    }
 	    ban_minutes 120
 	}
