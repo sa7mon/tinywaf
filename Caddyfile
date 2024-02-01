@@ -16,5 +16,11 @@ http://localhost:8282 {
 		}
 	}
 
-	tinywaf stdout
+	tinywaf {
+	    bad_uris {
+	        \^/wp-admin/.+$
+	        \^/login.php$
+	    }
+	    ban_minutes 120
+	}
 }
