@@ -9,15 +9,16 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"regexp"
-	"slices"
 	"strconv"
+	"time"
 )
 
-var blockedIPs []string
+var bans map[string]time.Time
 
 func init() {
 	caddy.RegisterModule(TinyWAF{})
 	httpcaddyfile.RegisterHandlerDirective("tinywaf", parseCaddyfile)
+	bans = make(map[string]time.Time)
 }
 
 type TinyWAF struct {
@@ -68,16 +69,23 @@ func respondWithBlock(w http.ResponseWriter) error {
 // ServeHTTP implements caddyhttp.MiddlewareHandler.
 func (m TinyWAF) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	ip := r.Header.Get("Cf-Connecting-Ip")
-	m.logger.Info(fmt.Sprintf("blocked IPs: %v", blockedIPs))
+	m.logger.Info(fmt.Sprintf("bans: %v", bans))
 
-	if slices.Contains(blockedIPs, ip) {
-		return respondWithBlock(w)
+	// are you already banned?
+	until, banned := bans[ip]
+	if banned {
+		if time.Now().Before(until) {
+			m.logger.Info(fmt.Sprintf("banned IP %s tried to request %s. %.0f minutes remaining on ban", ip, r.RequestURI, time.Until(until).Minutes()))
+			return respondWithBlock(w)
+		}
+		delete(bans, ip) // the ban has been lifted
 	}
 
+	// if not, should you be?
 	for _, pattern := range m.badURIPatterns {
 		if pattern.MatchString(r.RequestURI) {
 			m.logger.Info(fmt.Sprintf("ip %s requested bad URI '%s'. Blocking IP", ip, r.RequestURI))
-			blockedIPs = append(blockedIPs, ip)
+			bans[ip] = time.Now().Add(time.Duration(m.BanMinutes) * time.Minute)
 			return respondWithBlock(w)
 		}
 	}
