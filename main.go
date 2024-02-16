@@ -69,7 +69,6 @@ func respondWithBlock(w http.ResponseWriter) error {
 // ServeHTTP implements caddyhttp.MiddlewareHandler.
 func (m TinyWAF) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	ip := r.Header.Get("Cf-Connecting-Ip")
-	m.logger.Info(fmt.Sprintf("bans: %v", bans))
 
 	// are you already banned?
 	until, banned := bans[ip]
